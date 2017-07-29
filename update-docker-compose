@@ -1,0 +1,38 @@
+#!/bin/bash
+CMDS="curl git"
+for C in $CMDS; do
+  command -v $C > /dev/null && continue || { echo "$C command not found."; exit 1; }
+done
+cd
+NOW=$(date +%Y%m%d%H%M)
+git clone https://github.com/docker/compose.git compose-$NOW
+cd compose-$NOW
+LATEST_RELEASE=$(git tag -l | grep ^1 | sort -Vr | head -1)
+RC=$(echo $LATEST_RELEASE | grep -e '[a-zA-Z]')
+if [ ! -z $RC ]; then
+  STABLE_RELEASE=${LATEST_RELEASE/[\-a-zA-Z]*[0-9]*/}
+  RELEASES=$(git tag -l | grep ^1 | sort -Vr | xargs)
+  for R in $RELEASES; do
+    if [ $R == $STABLE_RELEASE ]; then
+      LATEST_RELEASE=$R
+      break
+    fi
+  done
+fi
+COMPOSE=$(command -v docker-compose)
+if [ ! -z $COMPOSE ]; then
+  echo "Updating docker-compose..."
+  INSTALLED_RELEASE=$($COMPOSE --version | cut -d',' -f1 | cut -d' ' -f3)
+  if [ $INSTALLED_RELEASE != $LATEST_RELEASE ]; then
+    sudo curl -L https://github.com/docker/compose/releases/download/$LATEST_RELEASE/docker-compose-$(uname -s)-$(uname -m) -o $COMPOSE
+    echo "docker-compose updated from $INSTALLED_RELEASE to $LATEST_RELEASE."
+  else
+    echo "docker-compose $LATEST_RELEASE is up to date."
+  fi
+else
+  sudo curl -L https://github.com/docker/compose/releases/download/$LATEST_RELEASE/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+  sudo chmod +x /usr/local/bin/docker-compose
+  docker-compose -v
+fi
+cd -
+rm -rf compose-$NOW/
